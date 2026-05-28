@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POST-产品标准化运营工具-质量周报</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 30px 20px; font-family: 'Microsoft YaHei', sans-serif; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; color: white; position: relative; }
+        .header h1 { font-size: 36px; font-weight: 700; margin-bottom: 10px; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .header p { font-size: 16px; opacity: 0.9; }
+
+        /* 同步按钮区域 */
+        .sync-section { position: absolute; right: 0; top: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+        .sync-info { font-size: 12px; opacity: 0.8; }
+        .sync-btn { padding: 8px 20px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.1); color: white; font-family: 'Microsoft YaHei'; font-size: 13px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 6px; }
+        .sync-btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .sync-btn.loading { pointer-events: none; opacity: 0.7; }
+        .sync-btn .spinner { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+        .sync-btn.loading .spinner { display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 上传按钮 */
+        .upload-btn-wrapper { position: relative; overflow: hidden; display: inline-block; }
+        .upload-btn-wrapper input[type=file] { position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+        /* 视图切换 */
+        .view-switch { position: absolute; top: 50px; right: 0; display: flex; gap: 8px; }
+        .view-btn { padding: 8px 16px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.1); color: white; font-family: 'Microsoft YaHei'; font-size: 13px; cursor: pointer; transition: all 0.3s ease; }
+        .view-btn:hover { background: rgba(255,255,255,0.2); }
+        .view-btn.active { background: rgba(255,255,255,0.3); border-color: white; font-weight: bold; }
+
+        /* 加载状态 */
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(102,126,234,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        .loading-overlay.hidden { display: none; }
+        .loading-spinner { width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        .loading-text { color: white; font-size: 18px; }
+
+        /* 错误提示 */
+        .error-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #e74c3c; color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; opacity: 0; transition: opacity 0.3s ease; }
+        .error-toast.show { opacity: 1; }
+
+        /* 布局 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); padding: 20px; transition: all 0.3s ease; position: relative; min-height: 420px; }
+        .card-full { grid-column: 1 / -1; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); padding: 20px 30px; }
+        .card-wide { grid-column: span 2; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+        .chart-container { width: 100%; height: 350px; }
+
+        /* 指标卡片 */
+        .metrics-container { width: 100%; }
+        .metrics-title { text-align: center; font-size: 16px; color: #2c3e50; font-weight: bold; margin-bottom: 20px; }
+        .metrics-row { display: flex; gap: 20px; justify-content: stretch; width: 100%; }
+        .metric-card { flex: 1; height: 120px; border-radius: 12px; display: flex; flex-direction: column; align-items: stretch; justify-content: center; transition: all 0.3s ease; cursor: default; padding: 15px 18px; position: relative; }
+        .metric-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .metric-header { display: flex; justify-content: space-between; align-items: center; }
+        .metric-name { font-size: 15px; color: #fff; font-weight: bold; }
+        .metric-value { font-size: 32px; font-weight: bold; color: #2c3e50; margin-top: 12px; }
+        .metric-subtitle { font-size: 11px; color: rgba(255,255,255,0.8); position: absolute; bottom: 8px; right: 15px; text-align: right; }
+
+        /* 图表工具栏 */
+        .chart-toolbar { position: absolute; top: 10px; right: 15px; display: flex; gap: 6px; z-index: 10; }
+        .chart-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf0 100%); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; color: #7c8a9a; transition: all 0.2s ease; }
+        .chart-btn:hover { background: linear-gradient(135deg, #e0e4e8 0%, #d4d8dc 100%); color: #667eea; }
+
+        /* 表格视图 */
+        .table-container { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 20px; background: white; z-index: 5; overflow: hidden; }
+        .table-container.active { display: flex; flex-direction: column; }
+        .table-title { text-align: center; font-size: 16px; color: #2c3e50; font-weight: bold; margin-bottom: 15px; flex-shrink: 0; }
+        .table-body { flex: 1; overflow: auto; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .data-table th { background: #f5f7fa; padding: 8px 10px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #e0e0e0; position: sticky; top: 0; }
+        .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; color: #555; white-space: nowrap; }
+        .data-table tr:hover td { background: #f9f9f9; }
+
+        /* 弹窗 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 1000; display: none; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: white; border-radius: 16px; padding: 20px; max-width: 95vw; max-height: 95vh; overflow: auto; position: relative; animation: modalIn 0.3s ease; }
+        @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-close { position: absolute; top: 10px; right: 15px; width: 32px; height: 32px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 18px; color: #666; transition: all 0.3s ease; }
+        .modal-close:hover { background: #e74c3c; color: white; transform: rotate(90deg); }
+        .modal-chart { width: 1000px; height: 650px; }
+
+        /* 明细视图 */
+        .detail-view { display: none; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        .detail-view.active { display: block; }
+        .chart-view { display: block; }
+        .chart-view.hidden { display: none; }
+
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .header h1 { font-size: 28px; } .sync-section { position: static; margin-bottom: 20px; } }
+    </style>
+</head>
+<body>
+    <!-- 加载状态 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载数据...</div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="error-toast" id="errorToast"></div>
+
+    <div class="container">
+        <div class="header">
+            <div class="sync-section">
+                <span class="sync-info" id="syncInfo">上次更新: --</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="sync-btn" id="syncBtn" onclick="syncData()">
+                        <span class="spinner"></span>
+                        <span>🔄 同步数据</span>
+                    </button>
+                    <div class="upload-btn-wrapper">
+                        <button class="sync-btn">
+                            <span>📤 上传Excel</span>
+                        </button>
+                        <input type="file" accept=".xlsx,.xls" onchange="uploadFile(event)">
+                    </div>
+                </div>
+            </div>
+            <h1>POST-产品标准化运营工具-质量周报</h1>
+            <p id="subtitle">数据加载中...</p>
+        </div>
+
+        <!-- 视图切换 -->
+        <div class="view-switch">
+            <button class="view-btn active" data-view="chart" onclick="switchView('chart')">📊 图表视图</button>
+            <button class="view-btn" data-view="detail" onclick="switchView('detail')">📋 明细视图</button>
+        </div>
+
+        <div class="chart-view" id="chartView">
+            <div class="grid">
+                <!-- 指标概览 -->
+                <div class="card-full" id="metricsCard">
+                    <div class="metrics-container">
+                        <div class="metrics-title">质量指标概览</div>
+                        <div class="metrics-row" id="metricsRow"></div>
+                    </div>
+                </div>
+
+                <!-- 图表区域 -->
+                <div class="card-wide card" id="chart_handler_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_handler')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_handler')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_handler" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_handler"></div>
+                </div>
+
+                <div class="card" id="chart_status_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_status')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_status')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_status" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_status"></div>
+                </div>
+
+                <div class="card" id="chart_task_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_task')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_task')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_task" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_task"></div>
+                </div>
+
+                <div class="card-wide card" id="chart_trend_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_trend')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_trend')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_trend" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_trend"></div>
+                </div>
+
+                <div class="card" id="chart_histogram_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_histogram')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_histogram')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_histogram" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_histogram"></div>
+                </div>
+
+                <div class="card" id="chart_rework_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_rework')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_rework')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_rework" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_rework"></div>
+                </div>
+
+                <div class="card" id="chart_stage_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_stage')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_stage')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_stage" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_stage"></div>
+                </div>
+
+                <div class="card" id="chart_type_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_type')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_type')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_type" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_type"></div>
+                </div>
+
+                <div class="card" id="chart_cause_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_cause')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_cause')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_cause" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_cause"></div>
+                </div>
+
+                <div class="card" id="chart_priority_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_priority')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_priority')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_priority" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_priority"></div>
+                </div>
+
+                <div class="card" id="chart_severity_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_severity')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_severity')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_severity" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_severity"></div>
+                </div>
+
+                <div class="card" id="chart_intro_card">
+                    <div class="chart-toolbar">
+                        <button class="chart-btn" onclick="toggleTable('chart_intro')" title="切换表格">📊</button>
+                        <button class="chart-btn" onclick="enlargeChart('chart_intro')" title="放大">⛶</button>
+                    </div>
+                    <div id="chart_intro" class="chart-container"></div>
+                    <div class="table-container" id="table_chart_intro"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 明细视图 -->
+        <div class="detail-view" id="detailView">
+            <h3 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">缺陷明细数据</h3>
+            <div class="table-body" style="max-height: 70vh;">
+                <table class="data-table" id="detailTable">
+                    <thead id="detailHeader"></thead>
+                    <tbody id="detailBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div id="modalChart" class="modal-chart"></div>
+        </div>
+    </div>
+
+    <script>
+        // 颜色配置
+        const COLORS = {
+            pastel: ['#A8D8EA', '#AA96DA', '#FCBAD3', '#FFFFD2', '#C4E1C1', '#F9D5A7', '#B8E0D2', '#D6EADF'],
+            fresh: ['#7FB3D5', '#76D7C4', '#F7DC6F', '#F0B27A', '#E59866', '#AF7AC5', '#85C1E9', '#82E0AA'],
+            status: { New: '#F7DC6F', Closed: '#82E0AA', ReOpen: '#F0B27A', Pending: '#85C1E9', Fixed: '#76D7C4' },
+            status_soft: { Closed: '#B8E0D2', Fixed: '#D6EADF', New: '#A8D8EA', Pending: '#AA96DA', ReOpen: '#F9D5A7' },
+            priority: { '优先': '#E57373', '高': '#FFB74D', '中': '#64B5F6', '低': '#81C784' },
+            severity: { '严重': '#E57373', '一般': '#FFB74D', '轻微': '#64B5F6', '建议': '#81C784' },
+            stage_find: {
+                '2.1-系统测试【基本流】': '#A8D8EA',
+                '2.2-系统测试【备选流】': '#AA96DA',
+                '4.1-回归测试【基本流】': '#FCBAD3',
+                '4.2-回归测试【备选流】': '#FFFFD2'
+            }
+        };
+
+        const TOOLTIP_CSS = "border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);";
+
+        let reportData = null;
+        const charts = {};
+
+        // 页面加载时获取数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+        });
+
+        // 加载数据
+        async function loadData() {
+            showLoading(true);
+            try {
+                const response = await fetch('/api/data');
+                const result = await response.json();
+
+                if (result.success) {
+                    reportData = result;
+                    renderReport();
+                    updateSyncInfo(result.last_update);
+                } else {
+                    showError(result.error || '获取数据失败');
+                }
+            } catch (e) {
+                showError('网络请求失败: ' + e.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 同步数据
+        async function syncData() {
+            const btn = document.getElementById('syncBtn');
+            btn.classList.add('loading');
+
+            try {
+                const response = await fetch('/sync');
+                const result = await response.json();
+
+                if (result.success) {
+                    reportData = result;
+                    renderReport();
+                    updateSyncInfo(result.last_update);
+                    showSuccess('数据同步成功！');
+                } else {
+                    showError(result.error || '同步失败');
+                }
+            } catch (e) {
+                showError('同步请求失败: ' + e.message);
+            } finally {
+                btn.classList.remove('loading');
+            }
+        }
+
+        // 上传Excel文件
+        async function uploadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess(result.message || '上传成功！');
+                    // 重新加载数据
+                    await loadData();
+                } else {
+                    showError(result.error || '上传失败');
+                }
+            } catch (e) {
+                showError('上传请求失败: ' + e.message);
+            } finally {
+                showLoading(false);
+                event.target.value = ''; // 清空文件选择
+            }
+        }
+
+        // 更新同步信息
+        function updateSyncInfo(time) {
+            document.getElementById('syncInfo').textContent = `上次更新: ${time}`;
+        }
+
+        // 渲染报告
+        function renderReport() {
+            if (!reportData || !reportData.data) return;
+
+            const data = reportData.data;
+            const metrics = data.metrics;
+
+            // 更新副标题
+            document.getElementById('subtitle').textContent = `共 ${metrics.total} 条缺陷数据 | 关闭率 ${metrics.close_rate}%`;
+
+            // 渲染指标卡片
+            renderMetrics(metrics);
+
+            // 渲染图表
+            renderHandlerChart(data.handler_stats);
+            renderStatusChart(data.status_dist);
+            renderTaskChart(data.task_dist);
+            renderTrendChart(data.trend);
+            renderHistogramChart(data.raw_data);
+            renderReworkChart(data.rework_dist);
+            renderStageChart(data.stage_dist);
+            renderTypeChart(data.type_dist);
+            renderCauseChart(data.cause_dist);
+            renderPriorityChart(data.priority_dist);
+            renderSeverityChart(data.severity_dist);
+            renderIntroChart(data.intro_dist);
+
+            // 渲染明细表格
+            renderDetailTable(data.raw_data);
+        }
+
+        // 渲染指标卡片
+        function renderMetrics(metrics) {
+            const metricsData = [
+                { name: '缺陷总数', value: metrics.total, color: '#667eea', icon: '🐛' },
+                { name: '新增缺陷', value: metrics.new_count, color: '#F7DC6F', icon: '🆕' },
+                { name: '已关闭', value: metrics.closed_count, color: '#82E0AA', icon: '✅' },
+                { name: '遗留缺陷', value: metrics.legacy_count, color: '#AF7AC5', icon: '📝' },
+                { name: '关闭率', value: metrics.close_rate + '%', color: '#76D7C4', icon: '📊' },
+                { name: '平均修复周期', value: metrics.avg_fix_time + '天', color: '#F0B27A', icon: '⏱️' }
+            ];
+
+            const html = metricsData.map(m => `
+                <div class="metric-card" style="background: linear-gradient(135deg, ${m.color} 0%, ${adjustColor(m.color, -20)} 100%);">
+                    <div class="metric-header">
+                        <span class="metric-name">${m.name}</span>
+                        <span style="font-size: 20px;">${m.icon}</span>
+                    </div>
+                    <div class="metric-value">${m.value}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('metricsRow').innerHTML = html;
+        }
+
+        // 颜色调整
+        function adjustColor(color, amount) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+            const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
+            const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
+            return '#' + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        // 渲染处理人员图表
+        function renderHandlerChart(data) {
+            if (!data || !data.handlers || data.handlers.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_handler'));
+            charts['chart_handler'] = chart;
+
+            const statusList = ['Closed', 'Fixed', 'New', 'Pending', 'ReOpen'];
+            const series = statusList.map(status => ({
+                name: status,
+                type: 'bar',
+                stack: 'total',
+                data: data.status_data[status] || [],
+                itemStyle: { color: COLORS.status_soft[status] || '#A8D8EA' }
+            }));
+
+            // 添加总计标签
+            series[series.length - 1].label = {
+                show: true,
+                position: 'top',
+                formatter: function(params) {
+                    return data.totals[params.dataIndex];
+                },
+                fontFamily: 'Microsoft YaHei',
+                fontSize: 11,
+                color: '#2c3e50'
+            };
+
+            // 添加折线图
+            series.push({
+                name: '平均修复时长(天)',
+                type: 'line',
+                yAxisIndex: 1,
+                data: data.avg_fix_time,
+                smooth: true,
+                itemStyle: { color: '#F5C4D0' },
+                lineStyle: { width: 2.5 },
+                symbol: 'circle',
+                symbolSize: 8,
+                label: {
+                    show: true,
+                    position: 'top',
+                    distance: 8,
+                    formatter: function(p) { return p.value > 0 ? p.value.toFixed(2) : ''; },
+                    fontFamily: 'Microsoft YaHei',
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    color: '#F5C4D0'
+                }
+            });
+
+            chart.setOption({
+                title: { text: '处理人员缺陷统计', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                legend: { show: true, orient: 'horizontal', top: 'bottom', left: 'center', itemWidth: 25, itemHeight: 14, textStyle: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                xAxis: { type: 'category', data: data.handlers, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11, rotate: 15 } },
+                yAxis: [
+                    { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei' } },
+                    { type: 'value', name: '平均修复时长(天)', position: 'right', splitLine: { show: false }, axisLabel: { fontFamily: 'Microsoft YaHei' } }
+                ],
+                series: series
+            });
+        }
+
+        // 渲染状态分布饼图
+        function renderStatusChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_status'));
+            charts['chart_status'] = chart;
+
+            const pieData = data.labels.map((label, i) => ({
+                name: label,
+                value: data.values[i]
+            }));
+
+            chart.setOption({
+                title: { text: '缺陷状态分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', extraCssText: TOOLTIP_CSS },
+                legend: { orient: 'horizontal', top: 'bottom', left: 'center', itemWidth: 25, itemHeight: 14, textStyle: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['50%', '45%'],
+                    data: pieData,
+                    label: { formatter: '{b}: {d}%', fontFamily: 'Microsoft YaHei' },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.status[params.name] || COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染任务项图表
+        function renderTaskChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_task'));
+            charts['chart_task'] = chart;
+
+            const colors = COLORS.fresh.slice(0, data.labels.length);
+
+            chart.setOption({
+                title: { text: '关联任务项统计', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                grid: { left: '120px', right: '60px', top: '50px', bottom: '30px' },
+                xAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'category', data: data.labels.map(String), axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'bar',
+                    data: data.values,
+                    label: { show: true, position: 'right', fontFamily: 'Microsoft YaHei', fontSize: 12 },
+                    itemStyle: {
+                        color: function(params) {
+                            return colors[params.dataIndex];
+                        },
+                        borderColor: 'white',
+                        borderWidth: 2,
+                        opacity: 0.85
+                    }
+                }]
+            });
+        }
+
+        // 渲染趋势图
+        function renderTrendChart(data) {
+            if (!data || !data.dates || data.dates.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_trend'));
+            charts['chart_trend'] = chart;
+
+            chart.setOption({
+                title: { text: '缺陷趋势分析', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', extraCssText: TOOLTIP_CSS },
+                legend: { orient: 'horizontal', top: 'bottom', left: 'center', itemWidth: 25, itemHeight: 14, textStyle: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                xAxis: { type: 'category', name: '日期', data: data.dates, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'value', name: '缺陷数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei' } },
+                series: [
+                    { name: '新增缺陷', type: 'line', data: data.new_data, smooth: true, color: '#A0E7E5', symbol: 'circle', symbolSize: 8, areaStyle: { opacity: 0.3 } },
+                    { name: '遗留缺陷', type: 'line', data: data.legacy_data, smooth: true, color: '#FFD69B', symbol: 'circle', symbolSize: 8, areaStyle: { opacity: 0.3 } },
+                    { name: '关闭缺陷', type: 'line', data: data.closed_data, smooth: true, color: '#F5C4D0', symbol: 'circle', symbolSize: 8, areaStyle: { opacity: 0.3 } }
+                ]
+            });
+        }
+
+        // 渲染修复周期直方图
+        function renderHistogramChart(rawData) {
+            if (!rawData || rawData.length === 0) return;
+
+            const fixPeriods = rawData
+                .map(d => d['缺陷修复周期(天)'])
+                .filter(v => v !== null && v !== undefined && v !== '/' && !isNaN(parseFloat(v)))
+                .map(v => parseFloat(v));
+
+            if (fixPeriods.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_histogram'));
+            charts['chart_histogram'] = chart;
+
+            // 分组统计
+            const bins = [0, 1, 2, 3, 5, 10, 999];
+            const labels = ['0-1天', '1-2天', '2-3天', '3-5天', '5-10天', '10天以上'];
+            const counts = new Array(labels.length).fill(0);
+
+            fixPeriods.forEach(v => {
+                for (let i = 0; i < bins.length - 1; i++) {
+                    if (v >= bins[i] && v < bins[i + 1]) {
+                        counts[i]++;
+                        break;
+                    }
+                }
+            });
+
+            chart.setOption({
+                title: { text: '缺陷修复周期分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                xAxis: { type: 'category', data: labels, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei' } },
+                series: [{
+                    type: 'bar',
+                    data: counts,
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    },
+                    label: { show: true, position: 'top', fontFamily: 'Microsoft YaHei' }
+                }]
+            });
+        }
+
+        // 渲染返工情况饼图
+        function renderReworkChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_rework'));
+            charts['chart_rework'] = chart;
+
+            const pieData = data.labels.map((label, i) => {
+                const count = parseInt(label) || 0;
+                const name = count === 0 ? '无返工' : `返工${count}次`;
+                return { name, value: data.values[i] };
+            });
+
+            const colors = ['#82E0AA', '#F7DC6F', '#F0B27A'].slice(0, pieData.length);
+
+            chart.setOption({
+                title: { text: '缺陷返工情况', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', extraCssText: TOOLTIP_CSS },
+                legend: { orient: 'horizontal', top: 'bottom', left: 'center', itemWidth: 25, itemHeight: 14, textStyle: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['50%', '45%'],
+                    data: pieData,
+                    label: { formatter: '{b}: {d}%', fontFamily: 'Microsoft YaHei' },
+                    itemStyle: {
+                        color: function(params) {
+                            return colors[params.dataIndex];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染发现阶段图表
+        function renderStageChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_stage'));
+            charts['chart_stage'] = chart;
+
+            const stageOrder = ['2.1-系统测试【基本流】', '2.2-系统测试【备选流】', '4.1-回归测试【基本流】', '4.2-回归测试【备选流】'];
+            const orderedLabels = stageOrder.filter(s => data.labels.includes(s));
+            const orderedValues = orderedLabels.map(s => data.values[data.labels.indexOf(s)]);
+
+            chart.setOption({
+                title: { text: '缺陷发现阶段分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                grid: { left: '200px', right: '60px', top: '50px', bottom: '30px' },
+                xAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'category', data: orderedLabels, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'bar',
+                    data: orderedValues,
+                    label: { show: true, position: 'right', fontFamily: 'Microsoft YaHei', fontSize: 12 },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.stage_find[params.name] || COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染缺陷类型饼图
+        function renderTypeChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_type'));
+            charts['chart_type'] = chart;
+
+            const pieData = data.labels.map((label, i) => ({
+                name: label,
+                value: data.values[i]
+            }));
+
+            chart.setOption({
+                title: { text: '缺陷类型分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', extraCssText: TOOLTIP_CSS },
+                legend: { orient: 'horizontal', top: 'bottom', left: 'center', itemWidth: 25, itemHeight: 14, textStyle: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '60%'],
+                    center: ['50%', '45%'],
+                    data: pieData,
+                    label: { formatter: '{b}: {d}%', fontFamily: 'Microsoft YaHei' },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染引入原因图表
+        function renderCauseChart(data) {
+            renderHorizontalBar('chart_cause', '缺陷引入原因分析', data, '140px');
+        }
+
+        // 渲染优先级图表
+        function renderPriorityChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_priority'));
+            charts['chart_priority'] = chart;
+
+            const priorityOrder = ['优先', '高', '中', '低'];
+            const orderedLabels = priorityOrder.filter(s => data.labels.includes(s));
+            const orderedValues = orderedLabels.map(s => data.values[data.labels.indexOf(s)]);
+
+            chart.setOption({
+                title: { text: '缺陷优先级分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                xAxis: { type: 'category', data: orderedLabels, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei' } },
+                series: [{
+                    type: 'bar',
+                    data: orderedValues,
+                    label: { show: true, position: 'top', fontFamily: 'Microsoft YaHei', fontSize: 12 },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.priority[params.name] || COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染严重程度图表
+        function renderSeverityChart(data) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('chart_severity'));
+            charts['chart_severity'] = chart;
+
+            const severityOrder = ['严重', '一般', '轻微', '建议'];
+            const orderedLabels = severityOrder.filter(s => data.labels.includes(s));
+            const orderedValues = orderedLabels.map(s => data.values[data.labels.indexOf(s)]);
+
+            chart.setOption({
+                title: { text: '缺陷严重程度分布', left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                grid: { left: '80px', right: '60px', top: '50px', bottom: '30px' },
+                xAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'category', data: orderedLabels, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'bar',
+                    data: orderedValues,
+                    label: { show: true, position: 'right', fontFamily: 'Microsoft YaHei', fontSize: 12 },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.severity[params.name] || COLORS.pastel[params.dataIndex % COLORS.pastel.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染引入阶段图表
+        function renderIntroChart(data) {
+            renderHorizontalBar('chart_intro', '缺陷引入阶段分布', data, '140px');
+        }
+
+        // 通用横向柱状图渲染
+        function renderHorizontalBar(chartId, title, data, gridLeft) {
+            if (!data || !data.labels || data.labels.length === 0) return;
+
+            const chart = echarts.init(document.getElementById(chartId));
+            charts[chartId] = chart;
+
+            chart.setOption({
+                title: { text: title, left: 'center', textStyle: { fontSize: 16, color: '#2c3e50', fontFamily: 'Microsoft YaHei' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, extraCssText: TOOLTIP_CSS },
+                grid: { left: gridLeft, right: '60px', top: '50px', bottom: '30px' },
+                xAxis: { type: 'value', name: '数量', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                yAxis: { type: 'category', data: data.labels.map(String), axisLabel: { fontFamily: 'Microsoft YaHei', fontSize: 11 } },
+                series: [{
+                    type: 'bar',
+                    data: data.values,
+                    label: { show: true, position: 'right', fontFamily: 'Microsoft YaHei', fontSize: 12 },
+                    itemStyle: {
+                        color: function(params) {
+                            return COLORS.fresh[params.dataIndex % COLORS.fresh.length];
+                        }
+                    }
+                }]
+            });
+        }
+
+        // 渲染明细表格
+        function renderDetailTable(rawData) {
+            if (!rawData || rawData.length === 0) return;
+
+            const columns = Object.keys(rawData[0]);
+            const displayColumns = columns.filter(c =>
+                !c.startsWith('_') &&
+                ['缺陷编号', '缺陷摘要', '缺陷状态', '处理人员', '优先级', '严重程度', '缺陷修复周期(天)'].includes(c)
+            );
+
+            // 表头
+            document.getElementById('detailHeader').innerHTML = '<tr>' +
+                displayColumns.map(c => `<th>${c}</th>`).join('') +
+                '</tr>';
+
+            // 表体
+            document.getElementById('detailBody').innerHTML = rawData.slice(0, 100).map(row =>
+                '<tr>' + displayColumns.map(c => `<td>${row[c] || ''}</td>`).join('') + '</tr>'
+            ).join('');
+        }
+
+        // 切换视图
+        function switchView(view) {
+            const chartView = document.getElementById('chartView');
+            const detailView = document.getElementById('detailView');
+            const btns = document.querySelectorAll('.view-btn');
+
+            btns.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === view) btn.classList.add('active');
+            });
+
+            if (view === 'chart') {
+                chartView.classList.remove('hidden');
+                detailView.classList.remove('active');
+            } else {
+                chartView.classList.add('hidden');
+                detailView.classList.add('active');
+            }
+        }
+
+        // 切换表格视图
+        function toggleTable(chartId) {
+            const chartDiv = document.getElementById(chartId);
+            const card = chartDiv.closest('.card');
+            const tableDiv = document.getElementById('table_' + chartId);
+
+            if (tableDiv.classList.contains('active')) {
+                tableDiv.classList.remove('active');
+                chartDiv.style.display = 'block';
+                charts[chartId] && charts[chartId].resize();
+            } else {
+                tableDiv.classList.add('active');
+                chartDiv.style.display = 'none';
+                generateTable(chartId, tableDiv);
+            }
+        }
+
+        // 生成表格
+        function generateTable(chartId, tableDiv) {
+            const chart = charts[chartId];
+            if (!chart) return;
+
+            const option = chart.getOption();
+            let html = '';
+
+            // 获取标题
+            const title = option.title && option.title[0] && option.title[0].text;
+            if (title) html += `<div class="table-title">${title}</div>`;
+
+            html += '<div class="table-body"><table class="data-table">';
+
+            // 根据图表类型生成表格
+            if (option.series[0].type === 'pie') {
+                const pieData = option.series[0].data;
+                const total = pieData.reduce((sum, d) => sum + d.value, 0);
+
+                html += '<thead><tr><th>类别</th><th>数量</th><th>占比</th></tr></thead><tbody>';
+                pieData.forEach(d => {
+                    const percent = (d.value / total * 100).toFixed(1);
+                    html += `<tr><td>${d.name}</td><td>${d.value}</td><td>${percent}%</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+            } else {
+                const isHorizontal = option.yAxis && option.yAxis[0] && option.yAxis[0].data;
+                const categories = isHorizontal ? option.yAxis[0].data : option.xAxis[0].data;
+                const series = option.series.filter(s => s.type === 'bar' || s.type === 'line');
+
+                if (series.length > 1) {
+                    // 多系列
+                    html += '<thead><tr><th>类别</th>' +
+                        series.map(s => `<th>${s.name}</th>`).join('') +
+                        '</tr></thead><tbody>';
+
+                    categories.forEach((cat, i) => {
+                        html += `<tr><td>${cat}</td>`;
+                        series.forEach(s => {
+                            const val = s.data[i];
+                            const displayVal = typeof val === 'object' ? (val.value || val[1] || 0) : val;
+                            html += `<td>${typeof displayVal === 'number' && s.name.includes('时长') ? displayVal.toFixed(2) : displayVal}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                } else {
+                    // 单系列
+                    html += '<thead><tr><th>类别</th><th>数量</th></tr></thead><tbody>';
+                    categories.forEach((cat, i) => {
+                        html += `<tr><td>${cat}</td><td>${series[0].data[i] || 0}</td></tr>`;
+                    });
+                    html += '</tbody></table></div>';
+                }
+            }
+
+            tableDiv.innerHTML = html;
+        }
+
+        // 放大图表
+        function enlargeChart(chartId) {
+            const modal = document.getElementById('modalOverlay');
+            const modalChartDiv = document.getElementById('modalChart');
+            const originalChart = charts[chartId];
+
+            if (!originalChart) return;
+
+            modal.classList.add('active');
+
+            const modalChart = echarts.init(modalChartDiv);
+            modalChart.setOption(originalChart.getOption());
+        }
+
+        // 关闭弹窗
+        function closeModal(event) {
+            if (event && event.target !== document.getElementById('modalOverlay')) return;
+
+            const modal = document.getElementById('modalOverlay');
+            modal.classList.remove('active');
+
+            const modalChart = echarts.getInstanceByDom(document.getElementById('modalChart'));
+            if (modalChart) modalChart.dispose();
+        }
+
+        // 显示加载状态
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+        }
+
+        // 显示错误
+        function showError(message) {
+            const toast = document.getElementById('errorToast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // 显示成功
+        function showSuccess(message) {
+            const toast = document.getElementById('errorToast');
+            toast.textContent = message;
+            toast.style.background = '#27ae60';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.style.background = '#e74c3c';
+            }, 2000);
+        }
+
+        // 响应式调整
+        window.addEventListener('resize', function() {
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.resize();
+            });
+        });
+    </script>
+</body>
+</html>
