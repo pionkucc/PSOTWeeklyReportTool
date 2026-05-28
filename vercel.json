@@ -1,31 +1,34 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/sync.py",
-      "use": "@vercel/python"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pip install -r requirements.txt",
+  "installCommand": "pip install -r requirements.txt",
+  "framework": null,
+  "regions": ["hkg1"],
+  "functions": {
+    "api/*.py": {
+      "runtime": "python3.11"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/",
-      "dest": "api/index.py"
+      "dest": "/api/index.py"
     },
     {
       "src": "/sync",
-      "dest": "api/sync.py"
+      "dest": "/api/sync.py"
     },
     {
       "src": "/upload",
-      "dest": "api/index.py"
+      "dest": "/api/index.py"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
+      "src": "/api/data",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/api/status",
+      "dest": "/api/index.py"
     }
   ],
   "crons": [
